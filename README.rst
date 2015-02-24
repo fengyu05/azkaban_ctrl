@@ -2,9 +2,8 @@ A Python Azkaban Command Line Wrapper
 =======================
 A command line wrapper to access azkaban.
 It provides funciton such as: create&delete project; upload project zips; list project flows, tasks and excutions; run flow and run single task ...
-Code path
-https://gitli.corp.linkedin.com/mlutt/mlutt/source/ddbb52647a6ea1a7b9f47318dab94ccc8687604b:release/az_ctrl.py
-Checkout out code: git clone git@gitli.corp.linkedin.com:mlutt/mlutt.git
+
+
 Example
 Create a project name 'my_project'
 az_ctrl.py create my_project 'My project description here' 
