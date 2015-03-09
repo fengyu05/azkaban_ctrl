@@ -10,7 +10,7 @@ with open(path.join(here, 'DESCRIPTION.rst'), encoding='utf-8') as f:
 
 setup(
     name='azkaban_ctrl',
-    version='0.1',
+    version='0.2.1',
 
     description='A Python Azkaban Command Line Wrapper',
     long_description=long_description,

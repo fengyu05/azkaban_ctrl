@@ -511,6 +511,22 @@ def checkLastSuc(project, flow, fetchCount=20):
     print 'Last Suc Finished Time:', toReadableTime(x['endTime'])
 
 def main():
+  from optparse import OptionParser
+  parser = OptionParser()
+  parser.add_option('--host', dest='host', default=None, help='Azkaban host address')
+  parser.add_option('--config', dest='config', default=DEFAULT_CONFIG, help='config file')
+  parser.add_option('-e', '--env', dest='env', default=ENV_NERTZ, help='Azkaban env')
+  parser.add_option('-p', '--param', dest='param', default='', help='Job param')
+  parser.add_option('--expire', dest='expire', type='int', default=DEFAULT_SESSION_EXPIRE, help='Session expire time in second')
+  parser.add_option('--concurrentOption', dest='concurrentOption', default='', help='concurrentOption: [ingore | pipeline | queue]')
+
+  (options,args) = parser.parse_args()
+
+  if (len(args) == 0):
+    parser.print_help()
+    printHelp()
+    exit()
+
   print 'options:', options
   print 'args:', args
   prepareAzTmp()
@@ -561,20 +577,4 @@ def printMoreHelp():
     print '\t\t', example, '\n'
 
 if __name__ == '__main__':
-  from optparse import OptionParser
-  parser = OptionParser()
-  parser.add_option('--host', dest='host', default=None, help='Azkaban host address')
-  parser.add_option('--config', dest='config', default=DEFAULT_CONFIG, help='config file')
-  parser.add_option('-e', '--env', dest='env', default=ENV_NERTZ, help='Azkaban env')
-  parser.add_option('-p', '--param', dest='param', default='', help='Job param')
-  parser.add_option('--expire', dest='expire', type='int', default=DEFAULT_SESSION_EXPIRE, help='Session expire time in second')
-  parser.add_option('--concurrentOption', dest='concurrentOption', default='', help='concurrentOption: [ingore | pipeline | queue]')
-
-  (options,args) = parser.parse_args()
-
-  if (len(args) == 0):
-    parser.print_help()
-    printHelp()
-    exit()
-
   main()
