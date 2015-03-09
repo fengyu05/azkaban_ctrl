@@ -85,7 +85,7 @@ setup(
     # pip to create the appropriate form of executable for the target platform.
     entry_points={
       'console_scripts' : [
-        'azctrl=azkaban_ctrl:main'
+        'az_ctrl=azkaban_ctrl:main'
       ],
     },
 )

@@ -1,15 +1,18 @@
 #!/usr/bin/python
 """
-Command wrapper for azkaban api
+Enhanced Azkaban command line interface
 """
-__author__ = 'zhdeng'
-__version__ = '1.1'
+__author__ = 'Zhifeng Deng'
+__email__ = 'zhdeng@linkedin.com'
+__version__ = '1.5'
 
 import os, time, re
 import json
 import base64
 import ConfigParser
 import urllib
+from time import strftime
+from datetime import datetime
 
 
 options = dict()
@@ -20,14 +23,16 @@ ENV_MAGIC = 'magic'
 ENV_NERTZ = 'nertz'
 ENV_NERTZ2 = 'nertz2'
 ENV_CANASTA = 'canasta'
+ENV_WAR = 'war'
 
-DEFAULT_SESSION_EXPIRE = 3600 * 4 # 2 hours
+DEFAULT_SESSION_EXPIRE = 3600 * 4 # 4 hours
 
 AZ_HOST = {
   ENV_MAGIC: 'https://eat1-magicaz01.grid.linkedin.com:8443',
   ENV_CANASTA: 'https://eat1-canastaaz01.grid.linkedin.com:8443',
   ENV_NERTZ: 'https://eat1-nertzaz01.grid.linkedin.com:8443',
   ENV_NERTZ2: 'https://eat1-nertzaz02.grid.linkedin.com:8443',
+  ENV_WAR: 'https://eat1-waraz01.grid.linkedin.com:8443',
 }
 
 HOME_PATH = os.environ["HOME"]
@@ -46,6 +51,8 @@ ACTION_FETCH_EXECS = 'execs'
 ACTION_FETCH_RUNING_EXECS = 'runningX'
 ACTION_RUN = 'run'
 ACTION_RUN_SINGLE_JOB = 'runJob'
+ACTION_RUN_LAST_FAIL = 'runLF'
+ACTION_CHECK_LAST_SUC = 'lastSuc'
 ACTION_CANCEL = 'cancel'
 ACTION_PAUSE = 'pause'
 ACTION_RESUME = 'resume'
@@ -72,6 +79,8 @@ ACTION_EXAMPLE = [
   'runningX porjcet flow -- fetch currect running executions',
   'run project flow -- run flow',
   'runJob project flow job -- run a specifed job under a flow',
+  'runLF project flow [fetchCount=20] -- retry last failed run of a flow',
+  'lastSuc project flow [fetchCount=20] -- check last successed run of a flow',
   'cancel project execId -- cancel running execution',
   'pause project execId -- pause a execution',
   'resume project execId -- resume a execution',
@@ -104,6 +113,9 @@ ACTION_EXAMPLE2 = [
 
 TEE_TMP = AZ_STORE_PATH + 'tee'
 SID_TMP = AZ_STORE_PATH + 'sid'
+
+def toReadableTime(millis):
+  return datetime.fromtimestamp(millis/1000.0).strftime("%a, %d %b %Y %H:%M:%S +0000")
 
 def printRun(cmd):
   print cmd
@@ -173,11 +185,11 @@ def makeDataSection(dataDict, isForm=False):
 def unauth():
   cleanSid(getHost())
 
-def readConfig():
-  if not os.path.exists(options.config):
+def readConfig(configPath):
+  if not os.path.exists(configPath):
     return {}
   from io import StringIO
-  vfile = StringIO('[main]\n%s'  % open(options.config).read())
+  vfile = StringIO(u'[main]\n%s'  % open(options.config).read())
   configParser = ConfigParser.RawConfigParser()
   configParser.readfp(vfile)
   items = configParser.items('main')
@@ -186,9 +198,8 @@ def readConfig():
     config[k] = v
   return config
 
-
 def authenticate():
-  config = readConfig()
+  config = readConfig(options.config)
 
   username = ''
   password = ''
@@ -297,17 +308,20 @@ def fetchExecutions(project, flow, start=0, length=10):
 
   cmd = 'curl -k --get %s %s' % (makeDataSection(dataDict), getHandler(HANDLER_MANAGER))
 
-  return teeRun(cmd)
+  return teeRun(cmd, loadJson=True)
 
 def fetchRunningExecutions(project, flow):
   authenticateForAction()
   sid = readSid()
   cmd = 'curl -k --get --data "session.id=%s&project=%s&flow=%s&ajax=%s" %s' % (sid, project, flow, 'getRunning', getHandler(HANDLER_EXECUTOR))
 
-  return teeRun(cmd)
+  result = teeRun(cmd, loadJson=True)
+  for execId in result.get('execIds', []):
+      showExecUrl(execId)
 
-def showExecUrl(jsonObject):
-  execid = jsonObject["execid"]
+  return result
+
+def showExecUrl(execid):
   if execid:
     host = getHost()
     print 'Check execution at:'
@@ -330,13 +344,16 @@ def runFlow(project, flow):
 
   cmd = 'curl -k --get %s %s' % (makeDataSection(dataDict), getHandler(HANDLER_EXECUTOR))
   result = teeRun(cmd, loadJson=True)
-  showExecUrl(result)
+  showExecUrl(result.get('execid'))
   return result
 
 def runJob(project, flow, task):
   jobsResult = fetchJobs(project, flow)
   ids = [ x['id'] for x in jobsResult['nodes'] if x['id'] != task ]
 
+  return runJobWithDisabledTask(project, flow, ids)
+
+def runJobWithDisabledTask(project, flow, disabledTaskList):
   authenticateForAction()
   sid = readSid()
 
@@ -345,15 +362,31 @@ def runJob(project, flow, task):
     'ajax': 'executeFlow',
     'project': project,
     'flow' : flow,
-    'disabled' : urllib.quote(json.dumps(ids)),
+    'disabled' : urllib.quote(json.dumps(disabledTaskList)),
   }
   if options.concurrentOption:
     dataDict['concurrentOption'] = options.concurrentOption
 
   cmd = 'curl -k --get %s %s' % (makeDataSection(dataDict), getHandler(HANDLER_EXECUTOR))
   result = teeRun(cmd, loadJson=True)
-  showExecUrl(result)
+  showExecUrl(result.get('execid'))
   return result
+
+def runLastFailed(project, flow, fetchCount=20):
+  execs = fetchExecutions(project, flow, 0, fetchCount)
+  failedExecId = None
+  for x in execs['executions']:
+    if x['status'] == 'FAILED':
+      failedExecId = x['execId']
+      break
+
+  if not failedExecId:
+    print 'No failure in last %d run' % fetchCount
+    exit(1)
+
+  jobsResult = fetchAExec(project, failedExecId)
+  ids = [ x['id'] for x in jobsResult['nodes'] if x['status'] == 'SUCCEEDED' or x['status'] == 'SKIPPED' ]
+  return runJobWithDisabledTask(project, flow, ids)
 
 def cancelFlow(project, execId):
   authenticateForAction()
@@ -461,27 +494,23 @@ def trackFailed(project, execId, outputPath='~/trackfail'):
       mrJobIds = [ id.split()[1] for id in mrJobIds ]
       print myJobIds
 
+def checkLastSuc(project, flow, fetchCount=20):
+  execs = fetchExecutions(project, flow, 0, fetchCount)
+  successedExecId = None
+  for x in execs['executions']:
+    if x['status'] == 'SUCCEEDED':
+      successedExecId = x['execId']
+      break
 
-
-
-
+  if not successedExecId:
+    print 'No successed run in last %d tries' % fetchCount
+    exit(1)
+  else:
+    print x
+    print 'Last Suc Started Time:', toReadableTime(x['startTime'])
+    print 'Last Suc Finished Time:', toReadableTime(x['endTime'])
 
 def main():
-  from optparse import OptionParser
-  parser = OptionParser()
-  parser.add_option('--host', dest='host', default=None, help='Azkaban host address')
-  parser.add_option('--config', dest='config', default=DEFAULT_CONFIG, help='config file')
-  parser.add_option('-e', '--env', dest='env', default=ENV_MAGIC, help='Azkaban env')
-  parser.add_option('--expire', dest='expire', type='int', default=DEFAULT_SESSION_EXPIRE, help='Session expire time in second')
-  parser.add_option('--concurrentOption', dest='concurrentOption', default='', help='concurrentOption: [ingore | pipeline | queue]')
-
-  (options,args) = parser.parse_args()
-
-  if (len(args) == 0):
-    parser.print_help()
-    printHelp()
-    exit()
-
   print 'options:', options
   print 'args:', args
   prepareAzTmp()
@@ -498,6 +527,8 @@ def main():
              ACTION_FETCH_RUNING_EXECS: fetchRunningExecutions,
              ACTION_RUN: runFlow,
              ACTION_RUN_SINGLE_JOB: runJob,
+             ACTION_RUN_LAST_FAIL: runLastFailed,
+             ACTION_CHECK_LAST_SUC: checkLastSuc,
              ACTION_CANCEL: cancelFlow,
              ACTION_PAUSE: pauseFlow,
              ACTION_RESUME: resumeFlow,
@@ -530,4 +561,20 @@ def printMoreHelp():
     print '\t\t', example, '\n'
 
 if __name__ == '__main__':
+  from optparse import OptionParser
+  parser = OptionParser()
+  parser.add_option('--host', dest='host', default=None, help='Azkaban host address')
+  parser.add_option('--config', dest='config', default=DEFAULT_CONFIG, help='config file')
+  parser.add_option('-e', '--env', dest='env', default=ENV_NERTZ, help='Azkaban env')
+  parser.add_option('-p', '--param', dest='param', default='', help='Job param')
+  parser.add_option('--expire', dest='expire', type='int', default=DEFAULT_SESSION_EXPIRE, help='Session expire time in second')
+  parser.add_option('--concurrentOption', dest='concurrentOption', default='', help='concurrentOption: [ingore | pipeline | queue]')
+
+  (options,args) = parser.parse_args()
+
+  if (len(args) == 0):
+    parser.print_help()
+    printHelp()
+    exit()
+
   main()
