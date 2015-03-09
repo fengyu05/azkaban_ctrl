@@ -520,6 +520,8 @@ def main():
   parser.add_option('--expire', dest='expire', type='int', default=DEFAULT_SESSION_EXPIRE, help='Session expire time in second')
   parser.add_option('--concurrentOption', dest='concurrentOption', default='', help='concurrentOption: [ingore | pipeline | queue]')
 
+  global options
+  global args
   (options,args) = parser.parse_args()
 
   if (len(args) == 0):
