@@ -13,11 +13,11 @@ import ConfigParser
 import urllib
 from time import strftime
 from datetime import datetime
+import getpass
 
 
 options = dict()
 args = list()
-
 
 ENV_MAGIC = 'magic'
 ENV_NERTZ = 'nertz'
@@ -52,7 +52,9 @@ ACTION_FETCH_RUNING_EXECS = 'runningX'
 ACTION_RUN = 'run'
 ACTION_RUN_SINGLE_JOB = 'runJob'
 ACTION_RUN_LAST_FAIL = 'runLF'
+ACTION_RUN_LAST_KILL = 'runLK'
 ACTION_CHECK_LAST_SUC = 'lastSuc'
+ACTION_CHECK_LAST_RUN = 'lastRun'
 ACTION_CANCEL = 'cancel'
 ACTION_PAUSE = 'pause'
 ACTION_RESUME = 'resume'
@@ -114,22 +116,31 @@ ACTION_EXAMPLE2 = [
 TEE_TMP = AZ_STORE_PATH + 'tee'
 SID_TMP = AZ_STORE_PATH + 'sid'
 
+def infoPrint(msg):
+  if not options.mute:
+    print msg
+
 def toReadableTime(millis):
-  return datetime.fromtimestamp(millis/1000.0).strftime("%a, %d %b %Y %H:%M:%S +0000")
+  if millis == -1:
+    return '-- --'
+  else:
+    return datetime.fromtimestamp(millis/1000.0).strftime("%a, %d %b %Y %H:%M:%S +0000")
 
 def printRun(cmd):
-  print cmd
+  infoPrint(cmd)
   assert os.system(cmd) == 0
 
 def teeRun(cmd, muteOut=False, loadJson=False):
+  if options.mute:
+    muteOut = True
   if not muteOut:
     cmd = cmd + '| tee %s' % TEE_TMP
   else:
-    cmd = cmd + '> %s' % TEE_TMP
-    print 'output too long, store in %s' % TEE_TMP
+    cmd = cmd + '> %s 2>/tmp/az_ctrl_stderr' % TEE_TMP
+    infoPrint('output too long, store in %s' % TEE_TMP)
 
   printRun(cmd)
-  print '\n'
+  infoPrint('\n')
   result = open(TEE_TMP).read()
 
   if loadJson:
@@ -161,7 +172,7 @@ def cleanSid(host):
 def readSid():
   host=getHost()
   sid = open(sidLocate(host)).read().strip()
-  print 'loading sid[%s]' % sid
+  infoPrint('loading sid[%s]' % sid)
   return sid
 
 def getHost():
@@ -206,7 +217,7 @@ def authenticate():
   if 'username' not in config:
     username = raw_input('Azkaban Username:')
   if 'password' not in config:
-    password = raw_input('Azkaban Password:')
+    password = getpass.getpass('Azkaban Password:')
 
   dataDict = {
     'action' : 'login',
@@ -373,10 +384,16 @@ def runJobWithDisabledTask(project, flow, disabledTaskList):
   return result
 
 def runLastFailed(project, flow, fetchCount=20):
+  return runLastRunOfStatus(project, flow, 'FAILED', fetchCount)
+
+def runLastKilled(project, flow, fetchCount=20):
+  return runLastRunOfStatus(project, flow, 'KILLED', fetchCount)
+
+def runLastRunOfStatus(project, flow, status, fetchCount=20):
   execs = fetchExecutions(project, flow, 0, fetchCount)
   failedExecId = None
   for x in execs['executions']:
-    if x['status'] == 'FAILED':
+    if x['status'] == status:
       failedExecId = x['execId']
       break
 
@@ -510,6 +527,24 @@ def checkLastSuc(project, flow, fetchCount=20):
     print 'Last Suc Started Time:', toReadableTime(x['startTime'])
     print 'Last Suc Finished Time:', toReadableTime(x['endTime'])
 
+def checkLastRun(project, flow, fetchCount=1):
+  execs = fetchExecutions(project, flow, 0, fetchCount)
+  execId = None
+  for x in execs['executions']:
+    execId = x['execId']
+    break
+
+  if not execId:
+    print 'No last run found'
+    exit(1)
+  else:
+    print 'Last Run of %s : %s' % (project, flow)
+    print 'Last Run Status:',x['status']
+    print 'Last Run By:',x['submitUser']
+    print 'Last Run Started Time:', toReadableTime(x['startTime'])
+    print 'Last Run Finished Time:', toReadableTime(x['endTime'])
+    print '------------------------------------------------------'
+
 def main():
   from optparse import OptionParser
   parser = OptionParser()
@@ -519,6 +554,7 @@ def main():
   parser.add_option('-p', '--param', dest='param', default='', help='Job param')
   parser.add_option('--expire', dest='expire', type='int', default=DEFAULT_SESSION_EXPIRE, help='Session expire time in second')
   parser.add_option('--concurrentOption', dest='concurrentOption', default='', help='concurrentOption: [ingore | pipeline | queue]')
+  parser.add_option('--mute', dest='mute', default=False, help='mute stdout except return text')
 
   global options
   global args
@@ -529,8 +565,9 @@ def main():
     printHelp()
     exit()
 
-  print 'options:', options
-  print 'args:', args
+  if not options.mute:
+    print 'options:', options
+    print 'args:', args
   prepareAzTmp()
 
   ALL_ACTION = {
@@ -546,7 +583,9 @@ def main():
              ACTION_RUN: runFlow,
              ACTION_RUN_SINGLE_JOB: runJob,
              ACTION_RUN_LAST_FAIL: runLastFailed,
+             ACTION_RUN_LAST_KILL: runLastKilled,
              ACTION_CHECK_LAST_SUC: checkLastSuc,
+             ACTION_CHECK_LAST_RUN: checkLastRun,
              ACTION_CANCEL: cancelFlow,
              ACTION_PAUSE: pauseFlow,
              ACTION_RESUME: resumeFlow,
