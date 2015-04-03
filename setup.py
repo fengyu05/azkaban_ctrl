@@ -10,11 +10,11 @@ with open(path.join(here, 'DESCRIPTION.rst'), encoding='utf-8') as f:
 
 setup(
     name='azkaban_ctrl',
-    version='0.2.3',
+    version='0.2.4',
 
-    description='A Python Azkaban Command Line Wrapper',
+    description='A Python Azkaban Command Line Interface',
     long_description=long_description,
-    url='http://github.com/fengyu05/azkaban_ctrl',
+    url='https://github.com/fengyu05/azkaban_ctrl/wiki',
     author='Zhifeng Deng',
     author_email='eitheror2013@gmail.com',
 

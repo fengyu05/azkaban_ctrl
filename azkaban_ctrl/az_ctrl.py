@@ -32,7 +32,7 @@ AZ_HOST = {
   ENV_CANASTA: 'https://eat1-canastaaz01.grid.linkedin.com:8443',
   ENV_NERTZ: 'https://eat1-nertzaz01.grid.linkedin.com:8443',
   ENV_NERTZ2: 'https://eat1-nertzaz02.grid.linkedin.com:8443',
-  ENV_WAR: 'https://eat1-waraz01.grid.linkedin.com:8443',
+  ENV_WAR: 'https://lva1-waraz01.grid.linkedin.com:8443',
 }
 
 HOME_PATH = os.environ["HOME"]
@@ -130,7 +130,7 @@ def printRun(cmd):
   infoPrint(cmd)
   assert os.system(cmd) == 0
 
-def teeRun(cmd, muteOut=False, loadJson=False):
+def teeRun(cmd, muteOut=False, loadJson=False, mutePrint=False):
   if options.mute:
     muteOut = True
   if not muteOut:
@@ -139,8 +139,12 @@ def teeRun(cmd, muteOut=False, loadJson=False):
     cmd = cmd + '> %s 2>/tmp/az_ctrl_stderr' % TEE_TMP
     infoPrint('output too long, store in %s' % TEE_TMP)
 
-  printRun(cmd)
-  infoPrint('\n')
+  if mutePrint:
+    os.system(cmd)
+  else:
+    printRun(cmd)
+    infoPrint('\n')
+
   result = open(TEE_TMP).read()
 
   if loadJson:
@@ -226,7 +230,7 @@ def authenticate():
   }
   cmd = 'curl -k -X POST %s %s' % (makeDataSection(dataDict), getHandler(HANDLER_MANAGER))
 
-  result = teeRun(cmd, loadJson=True)
+  result = teeRun(cmd, loadJson=True, mutePrint=True)
   if result['status'] == 'success':
     sessionId = result['session.id']
     writeSid(getHost(), sessionId)
