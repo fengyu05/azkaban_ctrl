@@ -4,7 +4,7 @@ Enhanced Azkaban command line interface
 """
 __author__ = 'Zhifeng Deng'
 __email__ = 'zhdeng@linkedin.com'
-__version__ = '1.5'
+__version__ = '1.6'
 
 import os, time, re
 import json
@@ -357,6 +357,11 @@ def runFlow(project, flow):
   if options.concurrentOption:
     dataDict['concurrentOption'] = options.concurrentOption
 
+  if options.params:
+    for param in options.params:
+      (key, value) = param.split(':')
+      dataDict['flowOverride[%s]' % key] = value
+
   cmd = 'curl -k --get %s %s' % (makeDataSection(dataDict), getHandler(HANDLER_EXECUTOR))
   result = teeRun(cmd, loadJson=True)
   showExecUrl(result.get('execid'))
@@ -550,19 +555,19 @@ def checkLastRun(project, flow, fetchCount=1):
     print '------------------------------------------------------'
 
 def main():
-  from optparse import OptionParser
-  parser = OptionParser()
-  parser.add_option('--host', dest='host', default=None, help='Azkaban host address')
-  parser.add_option('--config', dest='config', default=DEFAULT_CONFIG, help='config file')
-  parser.add_option('-e', '--env', dest='env', default=ENV_NERTZ, help='Azkaban env')
-  parser.add_option('-p', '--param', dest='param', default='', help='Job param')
-  parser.add_option('--expire', dest='expire', type='int', default=DEFAULT_SESSION_EXPIRE, help='Session expire time in second')
-  parser.add_option('--concurrentOption', dest='concurrentOption', default='', help='concurrentOption: [ingore | pipeline | queue]')
-  parser.add_option('--mute', dest='mute', default=False, help='mute stdout except return text')
+  from argparse import ArgumentParser
+  parser = ArgumentParser()
+  parser.add_argument('--host', dest='host', default=None, help='Azkaban host address')
+  parser.add_argument('--config', dest='config', default=DEFAULT_CONFIG, help='config file')
+  parser.add_argument('-e', '--env', dest='env', default=ENV_NERTZ, help='Azkaban env')
+  parser.add_argument('-p', '--params', dest='params', type=str, nargs='*', help='Job params')
+  parser.add_argument('--expire', dest='expire', type=int, default=DEFAULT_SESSION_EXPIRE, help='Session expire time in second')
+  parser.add_argument('--concurrentOption', dest='concurrentOption', default='', help='concurrentOption: [ingore | pipeline | queue]')
+  parser.add_argument('--mute', dest='mute', default=False, help='mute stdout except return text')
 
   global options
   global args
-  (options,args) = parser.parse_args()
+  (options,args) = parser.parse_known_args()
 
   if (len(args) == 0):
     parser.print_help()
