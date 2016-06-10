@@ -20,19 +20,17 @@ options = dict()
 args = list()
 
 ENV_MAGIC = 'magic'
-ENV_NERTZ = 'nertz'
-ENV_NERTZ2 = 'nertz2'
 ENV_CANASTA = 'canasta'
 ENV_WAR = 'war'
+ENV_HOLDEM = 'holdem'
 
 DEFAULT_SESSION_EXPIRE = 3600 * 4 # 4 hours
 
 AZ_HOST = {
   ENV_MAGIC: 'https://eat1-magicaz01.grid.linkedin.com:8443',
   ENV_CANASTA: 'https://eat1-canastaaz01.grid.linkedin.com:8443',
-  ENV_NERTZ: 'https://eat1-nertzaz01.grid.linkedin.com:8443',
-  ENV_NERTZ2: 'https://eat1-nertzaz02.grid.linkedin.com:8443',
   ENV_WAR: 'https://lva1-waraz01.grid.linkedin.com:8443',
+  ENV_HOLDEM: 'https://ltx1-holdemaz01.grid.linkedin.com:8443',
 }
 
 HOME_PATH = os.environ["HOME"]
@@ -93,7 +91,7 @@ ACTION_EXAMPLE = [
 ]
 
 ACTION_EXAMPLE2 = [
-  'To specify azkaban environment --env=[magic,cansta,nertz,nertz2]',
+  'To specify azkaban environment --env=[magic,cansta,holdem]',
   'Create a project name my_project',
   'az_ctrl.py create my_project "My project description here"',
   'Upload a project with a zipfile',
@@ -559,7 +557,7 @@ def main():
   parser = ArgumentParser()
   parser.add_argument('--host', dest='host', default=None, help='Azkaban host address')
   parser.add_argument('--config', dest='config', default=DEFAULT_CONFIG, help='config file')
-  parser.add_argument('-e', '--env', dest='env', default=ENV_NERTZ, help='Azkaban env')
+  parser.add_argument('-e', '--env', dest='env', default=ENV_HOLDEM, help='Azkaban env')
   parser.add_argument('-p', '--params', dest='params', type=str, nargs='*', help='Job params')
   parser.add_argument('--expire', dest='expire', type=int, default=DEFAULT_SESSION_EXPIRE, help='Session expire time in second')
   parser.add_argument('--concurrentOption', dest='concurrentOption', default='', help='concurrentOption: [ingore | pipeline | queue]')
